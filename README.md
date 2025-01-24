@@ -1,66 +1,212 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Transaction Processing System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A secure and scalable transaction processing system built with Laravel, featuring concurrent operation handling, data integrity protection, and comprehensive testing.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+-   RESTful API for transaction processing
+-   Real-time balance tracking
+-   Concurrent transaction handling
+-   Data integrity protection
+-   Comprehensive testing suite
+-   API Authentication
+-   Transaction history and filtering
+-   Balance monitoring
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+-   PHP 8.1 or higher
+-   Composer
+-   SQLite (for testing)
+-   Laravel 10.x
 
-## Learning Laravel
+## Installation
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+1. Clone the repository:
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```bash
+git clone https://github.com/yourusername/transaction-processing-system.git
+cd transaction-processing-system
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+2. Install dependencies:
 
-## Laravel Sponsors
+```bash
+composer install
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+3. Set up environment:
 
-### Premium Partners
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+4. Configure database in `.env`:
+
+```
+DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite
+```
+
+5. Run migrations:
+
+```bash
+touch database/database.sqlite
+php artisan migrate
+```
+
+6. Generate API documentation (optional):
+
+```bash
+php artisan l5-swagger:generate
+```
+
+## Running Tests
+
+Run the comprehensive test suite:
+
+```bash
+php artisan test
+```
+
+Run specific test categories:
+
+```bash
+php artisan test --testsuite=Feature
+php artisan test --testsuite=Unit
+```
+
+## API Documentation
+
+### Authentication
+
+All API endpoints require authentication using Laravel Sanctum. Include the bearer token in your request headers:
+
+```
+Authorization: Bearer <your-token>
+```
+
+### Endpoints
+
+#### Transactions
+
+-   **Create Transaction**
+
+    ```
+    POST /api/v1/transactions
+    ```
+
+    Body:
+
+    ```json
+    {
+        "amount": 100.0,
+        "type": "credit",
+        "description": "Optional description"
+    }
+    ```
+
+-   **Get Transaction History**
+    ```
+    GET /api/v1/transactions
+    ```
+    Query Parameters:
+    -   type: credit/debit
+    -   date_from: YYYY-MM-DD
+    -   date_to: YYYY-MM-DD
+
+#### Balance
+
+-   **Get Current Balance**
+
+    ```
+    GET /api/v1/balance
+    ```
+
+-   **Get Detailed Balance**
+    ```
+    GET /api/v1/balance/details
+    ```
+
+### Error Handling
+
+The API returns appropriate HTTP status codes and JSON responses:
+
+```json
+{
+    "status": "error",
+    "message": "Error description",
+    "errors": {
+        "field": ["Error details"]
+    }
+}
+```
+
+## Architecture
+
+### Key Components
+
+-   **Controllers**: Handle HTTP requests and responses
+-   **Services**: Implement business logic
+-   **Repositories**: Manage data access
+-   **Models**: Define database structure and relationships
+-   **Middleware**: Handle authentication and request processing
+
+### Concurrency Handling
+
+-   Database transactions for atomicity
+-   Pessimistic locking for balance updates
+-   Idempotency support via transaction references
+
+### Security Features
+
+-   API Authentication using Sanctum
+-   Request validation
+-   SQL injection protection
+-   Rate limiting
+-   Safe balance calculations
+
+## Scaling Considerations
+
+### Current Implementation
+
+-   Database transaction isolation
+-   Efficient indexing
+-   Cache implementation
+-   Request validation
+
+### Future Improvements
+
+1. **High Availability**
+
+    - Load balancing
+    - Database replication
+    - Cache clustering
+
+2. **Performance**
+
+    - Queue implementation for async processing
+    - Read replicas for balance queries
+    - Horizontal scaling
+
+3. **Monitoring**
+    - Transaction logging
+    - Performance metrics
+    - Error tracking
 
 ## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+For support and questions, please open an issue in the repository.
