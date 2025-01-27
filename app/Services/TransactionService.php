@@ -6,6 +6,9 @@ use App\Models\User;
 use App\Models\Transaction;
 use App\Repositories\TransactionRepository;
 use App\Repositories\AccountRepository;
+use App\Exceptions\InsufficientFundsException;
+use App\Exceptions\InvalidTransactionException;
+use App\Exceptions\AccountNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -48,24 +51,43 @@ class TransactionService
         try {
             // Start database transaction
             return DB::transaction(function () use ($userId, $amount, $type, $description) {
-                // Get user's account with lock
+                // Get account with lock
                 $account = $this->accountRepository->getAccountWithLock($userId);
 
                 if (!$account) {
-                    throw new Exception('Account not found');
+                    throw new AccountNotFoundException('Account not found');
                 }
 
                 if (!$account->isActive()) {
-                    throw new Exception('Account is not active');
+                    throw new InvalidTransactionException('INACTIVE_ACCOUNT', ['account_id' => $account->id]);
                 }
 
                 // Validate transaction
                 $this->validateTransaction($account, $amount, $type);
 
-                // Process the transaction
-                $transaction = $account->processTransaction($amount, $type, $description);
+                // Process transaction
+                $transaction = $account->transactions()->create([
+                    'amount' => $amount,
+                    'type' => $type,
+                    'description' => $description,
+                    'reference' => uniqid('TXN_', true),
+                    'status' => 'completed',
+                    'balance_after' => $type === 'credit'
+                        ? $account->balance + $amount
+                        : $account->balance - $amount,
+                    'metadata' => [
+                        'ip_address' => request()->ip(),
+                        'user_agent' => request()->userAgent(),
+                        'created_at' => now()->toDateTimeString()
+                    ]
+                ]);
 
-                // Log the transaction
+                // Update account balance
+                $account->balance = $transaction->balance_after;
+                $account->last_transaction_at = now();
+                $account->save();
+
+                // Log transaction
                 $this->logTransaction($transaction);
 
                 return $transaction;
@@ -106,7 +128,7 @@ class TransactionService
         return DB::transaction(function () use ($transactionId, $userId) {
             $transaction = $this->transactionRepository->findById($transactionId);
 
-            if (!$transaction || $transaction->user_id !== $userId) {
+            if (!$transaction || $transaction->account->user_id !== $userId) {
                 throw new Exception('Transaction not found');
             }
 
@@ -126,8 +148,10 @@ class TransactionService
 
             // Update original transaction
             $transaction->update([
-                'metadata->reversed' => true,
-                'metadata->reversal_id' => $reversal->id
+                'metadata' => array_merge($transaction->metadata ?? [], [
+                    'reversed' => true,
+                    'reversal_id' => $reversal->id
+                ])
             ]);
 
             return $reversal;
@@ -144,15 +168,20 @@ class TransactionService
      */
     protected function validateTransaction($account, float $amount, string $type): void
     {
+        if (!in_array($type, ['credit', 'debit'])) {
+            throw new InvalidTransactionException('INVALID_TYPE', ['type' => $type]);
+        }
+
+        if ($amount <= 0) {
+            throw new InvalidTransactionException('INVALID_AMOUNT', ['amount' => $amount]);
+        }
+
         if ($type === 'debit') {
             $availableBalance = $account->getAvailableBalance();
             if ($availableBalance < $amount) {
-                throw new Exception("Insufficient funds. Available balance: {$availableBalance}");
+                throw new InsufficientFundsException($availableBalance, $amount);
             }
         }
-
-        // Add additional validation rules as needed
-        // For example: daily limits, transaction frequency, etc.
     }
 
     /**
@@ -165,10 +194,11 @@ class TransactionService
     {
         Log::info('Transaction processed', [
             'transaction_id' => $transaction->id,
-            'user_id' => $transaction->user_id,
+            'user_id' => $transaction->account->user_id,
             'amount' => $transaction->amount,
             'type' => $transaction->type,
-            'balance_after' => $transaction->balance_after
+            'balance_after' => $transaction->balance_after,
+            'reference' => $transaction->reference
         ]);
     }
 }

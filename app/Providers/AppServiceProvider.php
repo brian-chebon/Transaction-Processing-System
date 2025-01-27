@@ -55,7 +55,11 @@ class AppServiceProvider extends ServiceProvider
         // Set default currency
         config(['app.currency' => env('DEFAULT_CURRENCY', 'USD')]);
 
-        // Configure cache prefix for better organization
+        // Only set cache prefix if not using array driver
+        if (Cache::getStore() instanceof \Illuminate\Cache\ArrayStore) {
+            // Skip prefix for array driver
+            return;
+        }
         Cache::setPrefix('tps_');
     }
 

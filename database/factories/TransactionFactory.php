@@ -13,12 +13,9 @@ class TransactionFactory extends Factory
 
     public function definition(): array
     {
-        $type = $this->faker->randomElement(['credit', 'debit']);
-        $amount = $this->faker->randomFloat(2, 10, 1000);
-
         return [
-            'amount' => $amount,
-            'type' => $type,
+            'amount' => $this->faker->randomFloat(2, 10, 1000),
+            'type' => $this->faker->randomElement(['credit', 'debit']),
             'description' => $this->faker->sentence(),
             'reference' => 'TXN_' . uniqid(),
             'status' => 'completed',
