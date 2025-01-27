@@ -7,75 +7,67 @@ use App\Models\User;
 use App\Models\Account;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // Create admin user
-        $admin = User::factory()->create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password123')
-        ]);
+        DB::transaction(function () {
+            // Create admin user
+            $admin = User::factory()->create([
+                'name' => 'Admin User',
+                'email' => 'admin@example.com',
+                'password' => Hash::make('password123')
+            ]);
 
-        // Create admin account with high balance
-        Account::factory()
-            ->forUser($admin)
-            ->highBalance()
-            ->create();
+            // Create admin account
+            $adminAccount = Account::factory()
+                ->forUser($admin)
+                ->create([
+                    'balance' => 100000.00,
+                    'currency' => 'USD',
+                    'status' => 'active',
+                    'last_transaction_at' => now()
+                ]);
 
-        // Create regular users with accounts and transactions
-        User::factory(10)->create()->each(function ($user) {
-            // Create account for each user
-            $account = Account::factory()
-                ->forUser($user)
-                ->create();
+            // Create regular users with accounts and transactions
+            User::factory()
+                ->count(10)
+                ->create()
+                ->each(function ($user) {
+                    // Create account for user
+                    $account = Account::factory()
+                        ->forUser($user)
+                        ->create([
+                            'balance' => 1000.00,
+                            'currency' => 'USD',
+                            'status' => 'active',
+                            'last_transaction_at' => now()
+                        ]);
 
-            // Create a mix of transactions for each account
-            // Credit transactions
-            Transaction::factory(5)
-                ->forAccount($account)
-                ->credit()
-                ->completed()
-                ->create();
+                    // Create some initial transactions
+                    $balance = $account->balance;
+                    for ($i = 0; $i < 3; $i++) {
+                        Transaction::factory()
+                            ->forAccount($account)
+                            ->credit()
+                            ->create([
+                                'amount' => 100.00,
+                                'description' => "Initial credit {$i}",
+                                'reference' => "TXN_" . uniqid(),
+                                'balance_after' => $balance + 100.00
+                            ]);
 
-            // Debit transactions
-            Transaction::factory(3)
-                ->forAccount($account)
-                ->debit()
-                ->completed()
-                ->create();
+                        $balance += 100.00;
+                        $account->update(['balance' => $balance]);
+                    }
+                });
 
-            // Pending transactions
-            Transaction::factory(2)
-                ->forAccount($account)
-                ->pending()
-                ->create();
+            // Run the test data seeder last
+            $this->call([
+                TestDataSeeder::class
+            ]);
         });
-
-        // Create some edge cases
-        // Inactive user with zero balance
-        $inactiveUser = User::factory()->create(['status' => 'inactive']);
-        Account::factory()
-            ->forUser($inactiveUser)
-            ->empty()
-            ->inactive()
-            ->create();
-
-        // User with suspended account
-        $suspendedUser = User::factory()->create();
-        Account::factory()
-            ->forUser($suspendedUser)
-            ->suspended()
-            ->create();
-
-        // Call TestDataSeeder
-        $this->call([
-            TestDataSeeder::class,
-        ]);
     }
 }
