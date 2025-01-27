@@ -19,13 +19,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         // Register repositories as singletons
-        $this->app->singleton(AccountRepository::class, function ($app) {
-            return new AccountRepository();
-        });
-
-        $this->app->singleton(TransactionRepository::class, function ($app) {
-            return new TransactionRepository();
-        });
+        $this->app->singleton(AccountRepository::class);
+        $this->app->singleton(TransactionRepository::class);
 
         // Register services with their dependencies
         $this->app->singleton(TransactionService::class, function ($app) {

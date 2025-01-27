@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 
 class GetBalanceRequest extends FormRequest
 {
@@ -14,7 +15,7 @@ class GetBalanceRequest extends FormRequest
     public function authorize(): bool
     {
         // Only allow authenticated users to check balance
-        return auth()->check();
+        return Auth::check();
     }
 
     /**
@@ -47,6 +48,7 @@ class GetBalanceRequest extends FormRequest
             ]
         ];
     }
+
 
     /**
      * Get custom messages for validator errors

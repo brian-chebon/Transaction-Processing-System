@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\Auth;
 
 class BalanceApiTest extends TestCase
 {
@@ -62,7 +63,8 @@ class BalanceApiTest extends TestCase
     /** @test */
     public function unauthenticated_user_cannot_view_balance()
     {
-        auth()->logout();
+        Auth::logout();
+        Sanctum::actingAs(new User()); // Create an unauthenticated session
 
         $response = $this->getJson($this->baseUrl);
 

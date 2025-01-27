@@ -4,10 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Services\BalanceService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Routing\Controller as BaseController;
 use Exception;
 
-class BalanceController extends Controller
+class BalanceController extends BaseController
 {
+    use AuthorizesRequests, ValidatesRequests;
+
     protected $balanceService;
 
     /**
@@ -30,7 +37,7 @@ class BalanceController extends Controller
         try {
             // Get current user's balance using the service layer
             $balance = $this->balanceService->getCurrentBalance(
-                auth()->user()->id
+                Auth::user()->id
             );
 
             // Return successful response with balance
@@ -44,7 +51,7 @@ class BalanceController extends Controller
             ]);
         } catch (Exception $e) {
             // Log the error for debugging
-            \Log::error('Balance retrieval failed: ' . $e->getMessage());
+            Log::error('Balance retrieval failed: ' . $e->getMessage());
 
             // Return appropriate error response
             return response()->json([
@@ -65,7 +72,7 @@ class BalanceController extends Controller
         try {
             // Get detailed balance information
             $details = $this->balanceService->getBalanceDetails(
-                auth()->user()->id
+                Auth::user()->id
             );
 
             return response()->json([

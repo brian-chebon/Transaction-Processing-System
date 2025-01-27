@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\Auth;
 
 class TransactionApiTest extends TestCase
 {
@@ -120,7 +121,8 @@ class TransactionApiTest extends TestCase
     /** @test */
     public function unauthenticated_user_cannot_create_transaction()
     {
-        auth()->logout();
+        Auth::logout();
+        Sanctum::actingAs(new User()); // Create an unauthenticated session
 
         $response = $this->postJson($this->baseUrl, [
             'amount' => 100.00,

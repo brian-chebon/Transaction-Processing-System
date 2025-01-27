@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 
 class CreateTransactionRequest extends FormRequest
 {
@@ -15,7 +16,7 @@ class CreateTransactionRequest extends FormRequest
     public function authorize(): bool
     {
         // Check if user is authenticated
-        return auth()->check();
+        return Auth::check();
     }
 
     /**

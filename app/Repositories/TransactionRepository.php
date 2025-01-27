@@ -1,91 +1,92 @@
 <?php
 
-namespace App\Services;
+namespace App\Repositories;
 
-use App\Repositories\AccountRepository;
-use App\Repositories\TransactionRepository;
-use Illuminate\Support\Facades\Cache;
+use App\Models\Transaction;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Exception;
+use Carbon\Carbon;
 
-class BalanceService
+class TransactionRepository
 {
-    protected $accountRepository;
-    protected $transactionRepository;
-
-    // Cache TTL in seconds (5 minutes)
-    protected const CACHE_TTL = 300;
-
     /**
-     * Constructor
-     *
-     * @param AccountRepository $accountRepository
-     * @param TransactionRepository $transactionRepository
-     */
-    public function __construct(
-        AccountRepository $accountRepository,
-        TransactionRepository $transactionRepository
-    ) {
-        $this->accountRepository = $accountRepository;
-        $this->transactionRepository = $transactionRepository;
-    }
-
-    /**
-     * Get current balance for a user
+     * Get user transactions with pagination
      *
      * @param int $userId
-     * @return float
-     * @throws Exception
+     * @param array $filters
+     * @return LengthAwarePaginator
      */
-    public function getCurrentBalance(int $userId): float
+    public function getUserTransactions(int $userId, array $filters = []): LengthAwarePaginator
     {
-        return Cache::remember(
-            "user_balance_{$userId}",
-            self::CACHE_TTL,
-            function () use ($userId) {
-                $account = $this->accountRepository->getAccountByUserId($userId);
+        $query = Transaction::whereHas('account', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        });
 
-                if (!$account) {
-                    throw new Exception('Account not found');
-                }
-
-                return $account->balance;
-            }
-        );
-    }
-
-    /**
-     * Get detailed balance information
-     *
-     * @param int $userId
-     * @return array
-     * @throws Exception
-     */
-    public function getBalanceDetails(int $userId): array
-    {
-        $account = $this->accountRepository->getAccountByUserId($userId);
-
-        if (!$account) {
-            throw new Exception('Account not found');
+        // Apply filters
+        if (isset($filters['type'])) {
+            $query->where('type', $filters['type']);
         }
 
-        $pendingTransactions = $this->transactionRepository->getPendingTransactions($userId);
-        $pendingCredits = $pendingTransactions->where('type', 'credit')->sum('amount');
-        $pendingDebits = $pendingTransactions->where('type', 'debit')->sum('amount');
+        if (isset($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
 
-        return [
-            'current_balance' => $account->balance,
-            'available_balance' => $account->getAvailableBalance(),
-            'pending_credits' => $pendingCredits,
-            'pending_debits' => $pendingDebits,
-            'currency' => $account->currency,
-            'last_updated' => $account->updated_at,
-            'account_status' => $account->status,
-            'recent_transactions' => $this->getRecentTransactions($userId)
-        ];
+        if (isset($filters['date_from'])) {
+            $query->where('created_at', '>=', $filters['date_from']);
+        }
+
+        if (isset($filters['date_to'])) {
+            $query->where('created_at', '<=', $filters['date_to']);
+        }
+
+        return $query->orderBy('created_at', 'desc')
+            ->paginate($filters['per_page'] ?? 15);
     }
 
     /**
-     * Get balance history for a date range
+     * Get pending transactions
+     *
+     * @param int $userId
+     * @return Collection
+     */
+    public function getPendingTransactions(int $userId): Collection
+    {
+        return Transaction::whereHas('account', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->where('status', 'pending')
+            ->get();
+    }
+
+    /**
+     * Get recent transactions
+     *
+     * @param int $userId
+     * @param int $limit
+     * @return Collection
+     */
+    public function getRecentTransactions(int $userId, int $limit = 5): Collection
+    {
+        return Transaction::whereHas('account', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Find transaction by ID
+     *
+     * @param int $id
+     * @return Transaction|null
+     */
+    public function findById(int $id): ?Transaction
+    {
+        return Transaction::find($id);
+    }
+
+    /**
+     * Get balance history
      *
      * @param int $userId
      * @param string $startDate
@@ -94,51 +95,40 @@ class BalanceService
      */
     public function getBalanceHistory(int $userId, string $startDate, string $endDate): array
     {
-        return $this->transactionRepository->getBalanceHistory($userId, $startDate, $endDate);
+        return Transaction::whereHas('account', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->whereBetween('created_at', [$startDate, $endDate])
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($transaction) {
+                return [
+                    'date' => $transaction->created_at->toDateString(),
+                    'balance' => $transaction->balance_after,
+                    'transaction_id' => $transaction->id
+                ];
+            })->toArray();
     }
 
     /**
-     * Get recent transactions
-     *
-     * @param int $userId
-     * @param int $limit
-     * @return \Illuminate\Support\Collection
-     */
-    protected function getRecentTransactions(int $userId, int $limit = 5)
-    {
-        return $this->transactionRepository->getRecentTransactions($userId, $limit);
-    }
-
-    /**
-     * Invalidate balance cache for a user
-     *
-     * @param int $userId
-     * @return void
-     */
-    public function invalidateBalanceCache(int $userId): void
-    {
-        Cache::forget("user_balance_{$userId}");
-    }
-
-    /**
-     * Calculate aggregate balance metrics
+     * Get transactions by period
      *
      * @param int $userId
      * @param string $period
-     * @return array
+     * @return Collection
      */
-    public function getBalanceMetrics(int $userId, string $period = 'month'): array
+    public function getTransactionsByPeriod(int $userId, string $period = 'month'): Collection
     {
-        $transactions = $this->transactionRepository->getTransactionsByPeriod($userId, $period);
+        $startDate = match ($period) {
+            'week' => Carbon::now()->subWeek(),
+            'month' => Carbon::now()->subMonth(),
+            'year' => Carbon::now()->subYear(),
+            default => Carbon::now()->subMonth(),
+        };
 
-        return [
-            'total_credits' => $transactions->where('type', 'credit')->sum('amount'),
-            'total_debits' => $transactions->where('type', 'debit')->sum('amount'),
-            'average_balance' => $transactions->avg('balance_after'),
-            'max_balance' => $transactions->max('balance_after'),
-            'min_balance' => $transactions->min('balance_after'),
-            'transaction_count' => $transactions->count(),
-            'period' => $period
-        ];
+        return Transaction::whereHas('account', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->where('created_at', '>=', $startDate)
+            ->orderBy('created_at', 'asc')
+            ->get();
     }
 }

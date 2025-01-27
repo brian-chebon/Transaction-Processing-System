@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Cache\RateLimiting\Limit;
 
@@ -150,7 +151,7 @@ class AuthenticateAPI extends Middleware
      */
     protected function logRequest(Request $request): void
     {
-        \Log::info('API Request', [
+        Log::info('API Request', [
             'user_id' => $request->user()?->id,
             'ip' => $request->ip(),
             'method' => $request->method(),

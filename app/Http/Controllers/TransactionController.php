@@ -6,10 +6,17 @@ use App\Http\Requests\CreateTransactionRequest;
 use App\Services\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Routing\Controller as BaseController;
 use Exception;
 
-class TransactionController extends Controller
+class TransactionController extends BaseController
 {
+    use AuthorizesRequests, ValidatesRequests;
+
     protected $transactionService;
 
     /**
@@ -55,7 +62,7 @@ class TransactionController extends Controller
             DB::rollBack();
 
             // Log the error for debugging
-            \Log::error('Transaction failed: ' . $e->getMessage());
+            Log::error('Transaction failed: ' . $e->getMessage());
 
             // Return appropriate error response
             return response()->json([
@@ -75,7 +82,7 @@ class TransactionController extends Controller
     {
         try {
             $transactions = $this->transactionService->getUserTransactions(
-                auth()->user()->id
+                Auth::user()->id
             );
 
             return response()->json([
