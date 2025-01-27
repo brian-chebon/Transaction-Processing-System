@@ -6,7 +6,9 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
+use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Cache\RateLimiting\Limit;
 
 class AuthenticateAPI extends Middleware
 {
@@ -23,14 +25,33 @@ class AuthenticateAPI extends Middleware
     public function handle($request, Closure $next, ...$guards): Response
     {
         try {
-            // Attempt to authenticate the request
+            // Check API version
+            $this->checkApiVersion($request);
+
+            // Apply rate limiting
+            if (!$this->checkRateLimit($request)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Too many requests',
+                    'retry_after' => RateLimiter::availableIn($this->getRateLimitKey($request))
+                ], 429);
+            }
+
+            // Authenticate request
             $this->authenticate($request, $guards);
 
-            // Add rate limiting here if needed
-            // For example: if user has exceeded rate limit, throw exception
+            // High-value transaction rate limiting
+            if ($this->isHighValueTransaction($request)) {
+                if (!$this->checkHighValueRateLimit($request)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'High-value transaction limit exceeded'
+                    ], 429);
+                }
+            }
 
-            // Add API version check if needed
-            $this->checkApiVersion($request);
+            // Log the request
+            $this->logRequest($request);
 
             return $next($request);
         } catch (AuthenticationException $e) {
@@ -43,48 +64,98 @@ class AuthenticateAPI extends Middleware
     }
 
     /**
-     * Handle unauthenticated users
+     * Check API version compatibility.
      *
-     * @param  Request  $request
-     * @param  array  $guards
-     * @return void
-     *
-     * @throws \Illuminate\Auth\AuthenticationException
+     * @param Request $request
+     * @return bool
      */
-    protected function unauthenticated($request, array $guards): void
+    protected function checkApiVersion(Request $request): bool
     {
-        throw new AuthenticationException(
-            'Unauthenticated.',
-            $guards,
-            $this->redirectTo($request)
-        );
+        $version = $request->header('Accept-Version', 'v1');
+        $supportedVersions = ['v1']; // Add more versions as needed
+
+        if (!in_array($version, $supportedVersions)) {
+            abort(400, 'Unsupported API version');
+        }
+
+        return true;
     }
 
     /**
-     * Check API version from request headers
+     * Apply rate limiting to the request.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    protected function checkRateLimit(Request $request): bool
+    {
+        $key = $this->getRateLimitKey($request);
+
+        if (RateLimiter::tooManyAttempts($key, config('sanctum.limiters.api.max_attempts'))) {
+            return false;
+        }
+
+        RateLimiter::hit($key, config('sanctum.limiters.api.decay_minutes') * 60);
+        return true;
+    }
+
+    /**
+     * Apply special rate limiting for high-value transactions.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    protected function checkHighValueRateLimit(Request $request): bool
+    {
+        $key = 'high_value:' . $this->getRateLimitKey($request);
+
+        if (RateLimiter::tooManyAttempts($key, config('sanctum.limiters.high_value.max_attempts'))) {
+            return false;
+        }
+
+        RateLimiter::hit($key, config('sanctum.limiters.high_value.decay_minutes') * 60);
+        return true;
+    }
+
+    /**
+     * Check if the transaction is high-value.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    protected function isHighValueTransaction(Request $request): bool
+    {
+        if ($request->is('api/*/transactions') && $request->isMethod('post')) {
+            return $request->input('amount', 0) >= config('app.high_value_threshold', 10000);
+        }
+        return false;
+    }
+
+    /**
+     * Get rate limit key for the request.
+     *
+     * @param Request $request
+     * @return string
+     */
+    protected function getRateLimitKey(Request $request): string
+    {
+        return sha1($request->user()?->id ?? $request->ip());
+    }
+
+    /**
+     * Log the API request.
      *
      * @param Request $request
      * @return void
-     * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
      */
-    protected function checkApiVersion(Request $request): void
+    protected function logRequest(Request $request): void
     {
-        $version = $request->header('Accept-Version');
-        $supportedVersions = ['v1']; // Add more versions as needed
-
-        if ($version && !in_array($version, $supportedVersions)) {
-            abort(400, 'Unsupported API version. Supported versions: ' . implode(', ', $supportedVersions));
-        }
-    }
-
-    /**
-     * Get the path the user should be redirected to when they are not authenticated.
-     *
-     * @param  Request  $request
-     * @return string|null
-     */
-    protected function redirectTo(Request $request): ?string
-    {
-        return null; // API should not redirect, only return JSON response
+        \Log::info('API Request', [
+            'user_id' => $request->user()?->id,
+            'ip' => $request->ip(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'user_agent' => $request->userAgent()
+        ]);
     }
 }

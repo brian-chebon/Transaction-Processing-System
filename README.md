@@ -25,7 +25,7 @@ A secure and scalable transaction processing system built with Laravel, featurin
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/transaction-processing-system.git
+git clone https://github.com/brian-chebon/transaction-processing-system.git
 cd transaction-processing-system
 ```
 
@@ -56,10 +56,16 @@ touch database/database.sqlite
 php artisan migrate
 ```
 
-6. Generate API documentation (optional):
+6. Seed the database:
 
 ```bash
-php artisan l5-swagger:generate
+php artisan db:seed
+```
+
+7. Install Sanctum:
+
+```bash
+php artisan sanctum:install
 ```
 
 ## Running Tests
@@ -143,6 +149,33 @@ The API returns appropriate HTTP status codes and JSON responses:
 }
 ```
 
+## Project Structure
+
+```
+transaction-system/
+├── app/
+│   ├── Exceptions/
+│   │   ├── AccountNotFoundException.php
+│   │   ├── InsufficientFundsException.php
+│   │   ├── InvalidTransactionException.php
+│   │   └── Handler.php
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   ├── Middleware/
+│   │   └── Requests/
+│   ├── Models/
+│   ├── Providers/
+│   ├── Repositories/
+│   └── Services/
+├── database/
+│   ├── factories/
+│   ├── migrations/
+│   └── seeders/
+└── tests/
+    ├── Feature/
+    └── Unit/
+```
+
 ## Architecture
 
 ### Key Components
@@ -166,6 +199,48 @@ The API returns appropriate HTTP status codes and JSON responses:
 -   SQL injection protection
 -   Rate limiting
 -   Safe balance calculations
+
+## Monitoring
+
+### Logging Channels
+
+Configure logging channels in `config/logging.php`:
+
+```php
+'channels' => [
+    'transactions' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/transactions.log'),
+        'level' => env('LOG_LEVEL', 'debug'),
+        'days' => 14,
+    ],
+    'security' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/security.log'),
+        'level' => env('LOG_LEVEL', 'debug'),
+        'days' => 30,
+    ],
+    'metrics' => [
+        'driver' => 'daily',
+        'path' => storage_path('logs/metrics.log'),
+        'level' => env('LOG_LEVEL', 'debug'),
+        'days' => 7,
+    ],
+],
+```
+
+### View Logs
+
+```bash
+# View transaction logs
+tail -f storage/logs/transactions.log
+
+# View security logs
+tail -f storage/logs/security.log
+
+# View metrics logs
+tail -f storage/logs/metrics.log
+```
 
 ## Scaling Considerations
 
@@ -195,6 +270,42 @@ The API returns appropriate HTTP status codes and JSON responses:
     - Performance metrics
     - Error tracking
 
+## Troubleshooting
+
+Common commands for troubleshooting:
+
+```bash
+# Clear cache
+php artisan cache:clear
+
+# Clear config
+php artisan config:clear
+
+# Rebuild autoload files
+composer dump-autoload
+
+# Reset database
+php artisan migrate:fresh --seed
+```
+
+## Development Commands
+
+Creating new components:
+
+```bash
+# Create controller
+php artisan make:controller TransactionController
+
+# Create model
+php artisan make:model Transaction -mf
+
+# Create test
+php artisan make:test TransactionTest
+
+# Create seeder
+php artisan make:seeder TransactionSeeder
+```
+
 ## Contributing
 
 1. Fork the repository
@@ -206,7 +317,3 @@ The API returns appropriate HTTP status codes and JSON responses:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support and questions, please open an issue in the repository.
